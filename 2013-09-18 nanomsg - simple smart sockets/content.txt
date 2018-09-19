@@ -1,0 +1,285 @@
+Good morning, everyone!
+
+--
+
+I'm Dirkjan, I'm a software engineer. I've worked at an asset management
+startup for 6 years, but recently quit to start looking for something
+else. In my free time, I hack on a bunch of open source projects, things
+like CouchDB, Mozilla's Persona, Gentoo Linux, and also a little
+something called nanomsg.
+
+--
+
+It's in its early stages, the 0.1 alpha release was issued less than three
+weeks ago. There's also no official policy on how to pronounce it,
+but I think nanomessage will do for now.
+
+--
+
+So, to start, I'd like to know a little bit more about who I'm talking to
+here. To show your level of familiarity with some of the stuff I'll be
+talking about here, please raise your hand if you know things about:
+
+--
+
+TCP/IP -- right, that's most of you,
+
+--
+
+message queues -- definitely not as many,
+
+--
+
+and ZeroMQ -- okay, so you folks know your stuff, I hope this won't be
+too boring for you!
+
+--
+
+I wanted to start by talking a little about how nanomsg came to be. As a
+starting point, it's pretty trivial these days to set up a connection
+on top of TCP/IP and pass some data over it.
+
+--
+
+But for many modern applications, we might want something more complex. We call
+these distributed systems: a software system in which components located
+on networked computers communicate and coordinate their actions by passing
+messages, in order to achieve a common goal.
+
+--
+
+One of the early ways to make this somewhat robust was to use message queues.
+Message queues provide an asynchronous communications protocol, such that
+reading and writing and distribution in general can largely be abstracted
+from the underlying networking layer.
+
+- queueing
+- abstraction of network/location
+- multicasting
+- provide more reliability than just the network
+
+--
+
+At first, message queues came largely in closed-source, vendor-controlled
+variety; you may have heard of IBM's WebSphere. Then, there were a bunch
+of open source projects, like Apache ActiveMQ and RabbitMQ and beanstalkd.
+A bunch of these eventually started standardizing on a common protocol
+dubbed the Advanced Messsage Queuing Protocol.
+
+--
+
+We're getting closer to nanomsg now, although we're just up to the point
+of talking about ZeroMQ, which is really a precursor to nanomsg.
+
+So Martin Sustrik, who worked on a message queue called OpenAMQ and the
+AMQP protocol, was trying to figure out how AMQP should handle
+multicasting -- a way of efficiently sending messages to a large number
+of other nodes without congesting the network. This thinking evolved
+into an idea he called ZeroMQ: a way of building message queues with
+an API that would be very similar to good old BSD sockets.
+
+I guess now would be as good a time as any to say a few things about
+how nanomsg relates to ZeroMQ. A lot of the core ideas are shared
+between these projects; the way I would describe it is that nanomsg
+is a kind of distilled ZeroMQ. In many ways, it's
+simpler and smaller, while providing very similar functionality.
+However, because it is simpler, it will also be easier to add new
+functionality on top of the small core. I'll talk a bit about
+the future roadmap at the end.
+
+--
+
+To me, the core idea in nanomsg is the idea of patterns. Fundamentally,
+nanomsg provides a socket-like interface, but with sockets that are
+enriched with functionality with clear meaning, very high conceptual
+integrity, and loose coupling. By making composition of the patterns
+easy, nanomsg makes messaging systems easy to build, but very flexible.
+
+So I wanted to step through the most important patterns that have been
+part of nanomsg from the start. In between, I'll try to explain their
+use with some examples and explain some of the features in nanomsg.
+
+--
+
+The simplest pattern is PAIR. In this pattern, two processes can
+communicate with each other. Each can send messages, and receive them.
+Simple, right?
+
+--
+
+Actually, here's one of the nice things in nanomsg, straight away: you can
+use different transport mechanisms, without changing any other code. So,
+for some application, you may just want to communicate between threads in
+a single process at the start. nanomsg lets you do that.
+
+But at some point, you might decide you want to separate functionality out
+into different processes. Instead of in-process messaging, you might want
+to use UNIX sockets. That's no pain at all, really.
+
+Finally, when it gets really busy, one box won't do anymore. Let's get
+some real networking in here. Otherwise, still unchanged!
+
+--
+
+Next pattern: REQ/REP, slightly more complex. This pattern is somewhat similar
+to the HTTP protocol: it consists of a request side and a response side. With
+this pattern, a message from the response side is always related to an earlier
+message sent by the request side. What makes it interesting is that a request
+side can connect to multiple response sockets, which will allow it to distribute
+requests in a round-robin fashion over a number of working processes.
+
+--
+
+But, there's a nice surprise in here. While we're used to our servers binding
+to a specific address or interface and the clients connecting to them, in
+nanomsg the notion of bind versus connect and the pattern role the socket
+takes on are completely separate! In this context we often talk about "stable"
+interfaces, those that have a well-known address, and "unstable" interfaces,
+whose address doesn't matter. As an example, you can trivially see how those
+map to HTTP, where the server always runs on port 80, but we don't know the
+client port.
+
+But for some specific system you want to build, it might make more sense if
+the request side has a fixed address, and you can get worker processes connect
+to it to request a job, process it, then return the result in a response.
+
+[ Jobs? ]
+
+--
+
+One example where I like to use this (and I'll show this later on with more
+context) is for control sockets. Like, I'll have some process with some data
+flow inside it, and I want to change the data flow, start or stop it. I can
+just add a little nanomsg socket sticking out the side with a tiny little
+bit of code to handle requests, run some code when a request comes in and
+provide a meaningful return value (some error message, for example).
+
+--
+
+Next, we get to my favorite pattern: PUB/SUB. Some of you may have heard about
+publish/subscribe topologies before. For example, PubSubHubBub is a protocol
+that is used to do real-time notification of RSS feed updates and the Jabber
+(or XMPP) protocol is a widely implemented instant messaging protocol that
+also relies on some of this stuff.
+
+--
+
+The key here is that a publish socket sends messages. Subscribe sockets
+can receive those messages, but they can also tell the publisher that they
+just want to receive a small subset of the messages. To make this easy,
+selection of messages works by filtering on the prefix. For example, to get all
+messages, you subscribe to the empty string. If you subscribe to 'a', you
+only receive all messages starting with a. Because subscriptions are
+forwarded to the publisher, only the messages you're subscribed to will
+actually travel the network, which is important if you're working over
+a slow link or on a connection where bandwidth is expensive.
+
+--
+
+We use this heavily at work, where we subscribe to tick data from
+about 1000 financial markets. We use a publish socket to push them all
+out onto our VPN, where there's a bunch of daemons listening in on the
+feed to do further processing. Some of them only subscribe to some
+parts that are relevant for their process, others digest it all.
+
+--
+
+An important characteristic I haven't talked about much so far is that
+nanomsg is really fast, so messages work their way straight from the
+exchange through to my processing daemons really fast. This is particularly
+important when you're working with stuff like stock quotes. One reason
+I like nanomsg because it's generally so fast you don't really have to
+think about performance a lot (unless you're doing really crazy stuff).
+
+--
+
+The final pattern I'll talk about today is the PUSH/PULL pattern, aka the
+pipeline pattern. This is where we kind of get back to the queueing
+paradigm: a PULL socket provides the entry side of the pipe, the PUSH socket
+provides the exit side. In the middle, you can perform some task or
+computation. By connecting multiple processes to either the PUSH or
+the PULL side, you can again load-balance specific parts of your
+pipeline separately.
+
+--
+
+As an interesting example, some of you may have heard of Zed Shaw's Mongrel2
+web server. Most of its concurrency features come from a smart way of using
+ZeroMQ sockets: there's a small central daemon that has two sockets, a PUSH
+socket and a SUB socket. Worker processes connect a PULL socket to the
+main process's PUSH socket to receive requests, and publish their responses
+on the PUB socket they've connected to the SUB socket from the main process.
+If you want to scale out your web server at some point, you can simply start
+another worker process, and it will magically be used by the main processes.
+
+--
+
+Here's one more concept you need to know: a device. A device is really just a
+way to connect two sockets together. For example, I have a daemon at work
+that connects three incoming SUB sockets into one PUB socket; thus I can
+aggregate three separate streams of messages back into a single stream.
+
+--
+
+To give you an idea what you can build with this, here's one of the little
+networks we run at work. Most of these processes run on machines that are
+all together on a local network, by the way, but we also have processes
+running on the other side of a VPN tunnel, and that works fine as well.
+
+So what you see here is the original data feed fetcher. This gets
+so-called tick data from our data vendor. It has a two ZeroMQ sockets: one
+REP socket, which is one of those control channels I talked about earlier,
+and one PUB socket, which publishes all of the tick data messages we receive.
+
+Next, we have about three different subscribers that receive the raw feed. Two
+of them synthesize data based on the data we receive and then put that out
+on another PUB socket. The third is a statistics daemon that counts how many
+messages arrive. It exposes a weighted average over, you guessed it, another
+REP socket. Then, we have a combinator processes which is basically a device
+that takes the original feed, the two synthesized feeds and combines them
+into a single feed. Next, we have two have more processes that actually work
+on this data stream, and another small daemon that saves all of the latest
+state into Redis so we can easily get at a snapshot of the current state.
+
+Another cool application is to reflect a pub/sub feed onto a WebSockets
+connection, for example, which you can use to create a dynamic page with
+low-latency updates to reflect what comes in on your nanomsg feed.
+
+--
+
+So, as I mentioned, nanomsg is actually pretty similar to ZeroMQ in many ways.
+In fact, all of the stuff I've shown you is actually still implemented on top
+of ZeroMQ, since we haven't had the time to port it over. Also, as I said
+before, nanomsg isn't that mature yet, so you might not yet want to run it
+in these kinds of production scenarios where your livelihood depends on it.
+
+But there are some differences as well, which I wanted to talk about. First
+off, nanomsg adheres to the POSIX API in a much more faithful way then
+what ZeroMQ ever did. This mostly means the API is simpler to use even if
+you haven't used POSIX sockets that much (or if you're using the API from
+a high-level language).
+
+Second, nanomsg is implemented in C rather than C++. This has made
+development easier. Partly because of the language and partly because this is
+a second system, a number of performance issues have also been avoided,
+meaning that nanomsg targets even lower latencies than ZeroMQ has.
+
+Third, nanomsg is much more extensible. This was another important goal
+when Martin started writing nanomsg. Much more thought has gone into
+making it possible to plugin different transports (so e.g. WebSockets
+instead of just TCP) and different communication patterns.
+
+Furthermore, nanomsg should be easier to use in applications with many
+threads, due to a new threading model. There's better support for
+the Windows operating system (with the same POSIX-like API) and many
+tweaks to improve performance. If you're interested, you can read about
+all of the gory details on the website.
+
+--
+
+http://www.imatix.com/articles:whats-wrong-with-amqp
+http://hintjens.com/blog:28
+http://www.imatix.com/articles:whither-amqp
+http://250bpm.com/blog:1
+http://brubeck.io/zeromq.html
+http://www.igvita.com/2010/09/03/zeromq-modern-fast-networking-stack/

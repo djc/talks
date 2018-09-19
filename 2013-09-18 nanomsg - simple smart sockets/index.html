@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1024" />
+    <title>nanomsg &ndash; simple smart sockets (Dirkjan Ochtman, @djco)</title>
+    <link href="style.css" rel="stylesheet" />
+</head>
+<body class="impress-not-supported">
+
+  <div class="fallback-message">
+    <p>Your browser <b>doesn't support the features required</b> by impress.js, so you are presented with a simplified version of this presentation.</p>
+    <p>For the best experience please use the latest <b>Chrome</b>, <b>Safari</b> or <b>Firefox</b> browser.</p>
+  </div>
+
+  <div id="impress">
+
+    <div class="step" data-x="0" data-y="0">
+      <p>
+        <strong>nanomsg</strong>:<br/>
+        <span style="padding-left: 400px;">simple</span><br />
+        <span style="padding-left: 500px;">smart</span><br />
+        <span style="padding-left: 650px;">sockets</span><br />
+      </p>
+    </div>
+    
+    <div class="step" data-x="0" data-y="700">
+      <p>dirkjan.ochtman.nl</p>
+      <img src="img/kentyde.svg" style="height: 100px; margin: 40px 0;"><br />
+      <img src="img/couchdb.svg" style="height: 100px; margin: 40px 10px;">
+      <img src="img/persona.svg" style="height: 100px; margin: 40px 10px;">
+      <img src="img/gentoo.png"  style="height: 100px; margin: 40px 10px;">
+    </div>
+    
+    <div class="step" data-x="-700" data-y="-700" data-z="1000">
+      <img src="img/show-of-hands.jpg">
+      <p class="attribution">by flickr:ter-burg</p>
+    </div>
+
+    <div class="step" data-x="-600" data-y="-1300" data-z="2000">
+      <p class="large">
+        TCP/IP
+      </p>
+    </div>
+
+    <div class="step" data-x="-250" data-y="-300" data-z="2000">
+      <p class="large">
+        message queues
+      </p>
+    </div>
+
+    <div class="step" data-x="-1800" data-y="-700" data-z="2000">
+      <p class="large">
+        &#216;MQ
+      </p>
+    </div>
+    
+    <div class="step" data-x="700" data-y="-700" data-z="1000">
+      <p class="large">A little history</p>
+    </div>
+    
+    <div class="step" data-x="700" data-y="-1900" data-z="2000">
+      <p class="large">
+        pipe: stream of data
+      </p>
+    </div>
+
+    <div class="step" data-x="1900" data-y="-1900" data-z="2000">
+      <p class="large">
+        queue abstraction
+      </p>
+    </div>
+
+    <div class="step" data-x="1900" data-y="-700" data-z="2000">
+      <ul>
+        <li>asynchronous</li>
+        <li>network/location abstraction</li>
+        <li>multicasting</li>
+        <li>more reliability</li>
+      </ul>
+    </div>
+
+    <div class="step" data-x="3100" data-y="-700" data-z="2000">
+      <p style="font-size: 1.5em;">
+        WebSphere -&gt; AMQP
+      </p>
+    </div>
+
+    <div class="step" data-x="3100" data-y="-1900" data-z="2000">
+      <p>
+        Martin Sústrik had an idea:<br><br>
+        a message queue toolkit with sockets API
+      </p>
+    </div>
+
+    <div class="step" data-x="3100" data-y="-3100" data-z="2000">
+      <p class="">
+        (&#216;MQ versus nanomsg)
+      </p>
+    </div>
+    
+    <div class="step" data-x="1400" data-y="700" data-z="1000">
+      <p class="large">Patterns &amp; Features</p>
+    </div>
+    
+    <div class="step" data-x="2600" data-y="700" data-z="2000">
+      <pre style="width: 470px; float: left; display: block;">
+import nnpy
+
+p1 = nnpy.Socket(nnpy.AF_SP, nnpy.PAIR)
+p1.bind('inproc://pair')
+
+p2 = nnpy.Socket(nnpy.AF_SP, nnpy.PAIR)
+p2.connect('inproc://pair')
+
+p1.send('hello, p2')
+p1.send('I am p1')
+print p2.recv()
+p2.send('nice to meet you')
+print p1.recv()
+print p2.recv()</pre>
+      <pre style="width: 470px; float: left; display: block; margin-left: 5px;">
+hello, p2
+nice to meet you
+I am p1</pre>
+    </div>
+    
+    <div class="step" data-x="2600" data-y="1900" data-z="2000">
+      <pre>
+diff --git a/pair.py b/pair.py
+<span class="del">--- a/pair.py</span>
+<span class="add">+++ b/pair.py</span>
+@@ -1,10 +1,10 @@
+ import nnpy
+ 
+ p1 = nnpy.Socket(nnpy.AF_SP, nnpy.PAIR)
+<span class="del">-p1.bind('inproc://pair')</span>
+<span class="add">+p1.bind('ipc:///tmp/pair')</span>
+ 
+ p2 = nnpy.Socket(nnpy.AF_SP, nnpy.PAIR)
+<span class="del">-p2.connect('inproc://pair')</span>
+<span class="add">+p2.connect('ipc:///tmp/pair')</span>
+ 
+ p1.send('hello, p2')
+ p1.send('I am p1')</pre>
+    </div>
+  
+    <div class="step" data-x="1400" data-y="1900" data-z="2000">
+      <pre style="width: 470px; float: left;">
+import nnpy
+p1 = nnpy.Socket(nnpy.AF_SP, nnpy.PAIR)
+p1.bind('ipc:///tmp/pair')
+p1.send('hello, p2')
+p1.send('I am p1')
+print p1.recv()</pre>
+      <pre style="width: 470px; float: left; margin-left: 5px;">
+import nnpy
+p2 = nnpy.Socket(nnpy.AF_SP, nnpy.PAIR)
+p2.connect('ipc:///tmp/pair')
+print p2.recv()
+p2.send('nice to meet you')
+print p2.recv()</pre>
+      <pre style="width: 470px; float: left; margin-top: 5px;">
+nice to meet you</pre><br>
+      <pre style="width: 470px; float: left; margin: 5px 0 0 5px;">
+hello, p2
+I am p1</pre>
+    </div>
+
+    <div class="step" data-x="1400" data-y="3100" data-z="2000">
+      <pre>
+diff --git a/pair.py b/pair.py
+<span class="del">--- a/pair.py</span>
+<span class="add">+++ b/pair.py</span>
+@@ -1,10 +1,10 @@
+ import nnpy
+ 
+ p1 = nnpy.Socket(nnpy.AF_SP, nnpy.PAIR)
+<span class="del">-p1.bind('inproc://pair')</span>
+<span class="add">+p1.bind('tcp://localhost:18913')</span>
+ 
+ p2 = nnpy.Socket(nnpy.AF_SP, nnpy.PAIR)
+<span class="del">-p2.connect('inproc://pair')</span>
+<span class="add">+p2.connect('tcp://localhost:18913')</span>
+ 
+ p1.send('hello, p2')
+ p1.send('I am p1')</pre>
+    </div>
+  
+    <div class="step" data-x="2600" data-y="3100" data-z="2000">
+      <pre style="width: 470px; float: left; display: block;">
+import nnpy
+
+rep = nnpy.Socket(nnpy.AF_SP, nnpy.REP)
+rep.bind('inproc://foo')
+
+req = nnpy.Socket(nnpy.AF_SP, nnpy.REQ)
+req.connect('inproc://foo')
+
+req.send('test!')
+print rep.recv()
+rep.send('echo!')
+print req.recv()</pre>
+      <pre style="width: 470px; float: left; display: block; margin-left: 5px;">
+test!
+echo!</pre>
+    </div>
+
+    <div class="step" data-x="3800" data-y="3100" data-z="2000">
+      <pre>
+diff --git a/req-rep.py b/req-rep.py
+<span class="del">--- a/req-rep.py</span>
+<span class="add">+++ b/req-rep.py</span>
+@@ -1,10 +1,10 @@
+ import nnpy
+ 
+ rep = nnpy.Socket(nnpy.AF_SP, nnpy.REP)
+<span class="del">-rep.bind('inproc://foo')</span>
+<span class="add">+rep.connect('inproc://foo')</span>
+ 
+ req = nnpy.Socket(nnpy.AF_SP, nnpy.REQ)
+<span class="del">-req.connect('inproc://foo')</span>
+<span class="add">+req.bind('inproc://foo')</span>
+ 
+ req.send('test!')
+ print rep.recv()</pre>
+    </div>
+
+    <div class="step" data-x="3800" data-y="1900" data-z="2000">
+      <pre>
+import nnpy
+
+class Server:
+    def __init__(self, core):
+        self.core = core
+    def run(self):
+        sock = nnpy.Socket(nnpy.AF_SP, nnpy.REP)
+        sock.bind(COMMAND_SERVER)
+        while True:
+            msg = sock.recv()
+            # handle command
+            sock.send(rsp)
+
+class Client:
+    def __init__(self, addr):
+        self.sock = nnpy.Socket(nnpy.AF_SP, nnpy.REQ)
+        self.sock.connect(addr)
+    def _send(self, msg):
+        self.sock.send(msg)
+        return self.sock.recv()</pre>
+    </div>
+
+    <div class="step" data-x="3800" data-y="700" data-z="2000">
+      <img src="img/control.svg" width=600>
+    </div>
+  
+    <div class="step" data-x="5000" data-y="700" data-z="2000">
+      <pre>
+import nnpy      
+
+pub = nnpy.Socket(nnpy.AF_SP, nnpy.PUB)
+pub.bind('inproc://foo')
+
+sub1 = nnpy.Socket(nnpy.AF_SP, nnpy.SUB)
+sub1.connect('inproc://foo')
+sub1.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, '')
+
+sub2 = nnpy.Socket(nnpy.AF_SP, nnpy.SUB)
+sub2.connect('inproc://foo')
+sub2.setsockopt(nnpy.SUB, nnpy.SUB_SUBSCRIBE, 'w')
+
+pub.send('hello,')
+pub.send('world')
+print sub1.recv()
+print sub2.recv()
+print sub1.recv()</pre>
+    </div>
+
+    <div class="step" data-x="5000" data-y="1900" data-z="2000">
+      <p class="large">60&#956;s</p>
+    </div>
+	
+	<div class="step" data-x="5000" data-y="3100" data-z="2000">
+	  <img src="img/push-pull.svg">
+	</div>
+	
+	<div class="step" data-x="5000" data-y="4300" data-z="2000">
+	  <img src="img/mongrel2.svg">
+	</div>
+	
+	<div class="step" data-x="3800" data-y="4300" data-z="2000">
+	  <img src="img/device.svg">
+	</div>
+	
+	<div class="step" data-x="2600" data-y="4300" data-z="2000">
+	  <img src="img/work.svg">
+	</div>
+
+    <div class="step" data-x="-700" data-y="700" data-z="1000">
+      <p class="large">wrapping up</p>
+    </div>
+
+    <div class="step" data-x="-1900" data-y="700" data-z="2000">
+      <ul>
+        <li>POSIXy</li>
+        <li>MIT</li>
+        <li>C</li>
+        <li>extensible</li>
+        <li>threading, performance, etc.</li>
+      </ul>
+    </div>
+    
+    <div class="step" data-x="0" data-y="0" data-z="7000">
+      <p class="large">Questions?</p>
+    </div>
+    
+  </div>
+  
+  <script src="impress.js"></script>
+  <script>
+    
+    var api = impress();
+    impress().init();
+    /*
+    var sock = new WebSocket('ws://xavamedia.nl:8000');
+    sock.onopen = function(e) {
+      sock.send(JSON.stringify({'show': document.location.hash}));
+    };
+    sock.onmessage = function(e) {
+      var msg = JSON.parse(e.data);
+      console.log(JSON.stringify(msg));
+      if (msg.show) return;
+      if (msg.control == 'next') {
+        api.next();
+      } else if (msg.control == 'prev') {
+        api.prev();
+      }
+      setTimeout(function() {
+      	sock.send(JSON.stringify({'show': document.location.hash}));
+      }, 1200);
+    };
+    */
+    
+  </script>
+
+</body>
+</html>
